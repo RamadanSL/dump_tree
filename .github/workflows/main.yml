@@ -23,7 +23,7 @@ jobs:
 
       - name: Download Image from Google Drive
         run: |
-          gdown --id 1BFML1FevkxGUDiI3I2ha6qCAvNOC-aO7 -O vendor_boot.img
+          gdown "https://drive.google.com/uc?id=1BFML1FevkxGUDiI3I2ha6qCAvNOC-aO7" -O vendor_boot.img
 
       - name: Generate Device Tree
         run: |

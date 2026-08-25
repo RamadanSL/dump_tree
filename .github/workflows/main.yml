@@ -135,7 +135,6 @@ jobs:
           OF_ALLOW_DISABLE_NAVBAR := 0
           OF_USE_GREEN_LED := 0
           OF_VANILLA_BUILD := 1
-          FOX_BUILD_DEVICE := Spark30
 
           ENABLE_VIRTUAL_AB := true
           TARGET_RECOVERY_FSTAB := $(DEVICE_PATH)/recovery/root/system/etc/recovery.fstab
@@ -161,8 +160,10 @@ jobs:
               fox_Spark30-userdebug
           EOF
 
-          # Удаляем vendorsetup.sh, чтобы он не вызывал сбоев при инклюде
-          rm -f device/tecno/Spark30/vendorsetup.sh
+          cat << 'EOF' > device/tecno/Spark30/vendorsetup.sh
+          add_lunch_combo fox_Spark30-eng
+          add_lunch_combo fox_Spark30-userdebug
+          EOF
 
       - name: Build OrangeFox
         run: |
@@ -172,8 +173,8 @@ jobs:
           export LC_ALL="C"
 
           source build/envsetup.sh
-          lunch fox_Spark30-eng || lunch fox_Spark30-userdebug
-          make vendor_bootimage -j$(nproc) || make recoveryimage -j$(nproc)
+          lunch fox_Spark30-eng
+          make vendor_bootimage -j$(nproc)
 
       - name: Upload OrangeFox Output
         uses: actions/upload-artifact@v4

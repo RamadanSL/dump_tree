@@ -22,8 +22,9 @@ jobs:
 
       - name: Install Build Dependencies
         run: |
+          sudo dpkg --add-architecture i386
           sudo apt update
-          sudo apt install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git git-lfs gnupg gperf lib32ncurses5-dev lib32z1-dev liblibc6-dev-i386 libncurses5 libncurses5-dev libreadline-dev libsqlite3-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev python3 python3-pip android-sdk-libsparse-utils android-tools-mkbootimg
+          sudo apt install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git git-lfs gnupg gperf lib32ncurses5-dev lib32z1-dev libc6-dev-i386 libncurses5 libncurses5-dev libreadline-dev libsqlite3-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev python3 python3-pip android-sdk-libsparse-utils
 
       - name: Install repo tool
         run: |
@@ -54,7 +55,7 @@ jobs:
           mkdir -p device/tecno/Spark30
           cp -r $GITHUB_WORKSPACE/tree_temp/device/tecno/Spark30/* device/tecno/Spark30/
 
-          # Настройка BoardConfig.mk под OrangeFox для Tecno Spark 30 (MediaTek Android 14)
+          # Настройка BoardConfig.mk под OrangeFox
           cat << 'EOF' > device/tecno/Spark30/BoardConfig.mk
           DEVICE_PATH := device/tecno/Spark30
 

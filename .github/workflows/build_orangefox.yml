@@ -24,7 +24,7 @@ jobs:
         run: |
           sudo dpkg --add-architecture i386
           sudo apt update
-          sudo apt install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git git-lfs gnupg gperf lib32ncurses5-dev lib32z1-dev libc6-dev-i386 libncurses5 libncurses5-dev libreadline-dev libsqlite3-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev python3 python3-pip android-sdk-libsparse-utils
+          sudo apt install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git git-lfs gnupg gperf lib32ncurses5-dev lib32z1-dev libc6-dev-i386 libncurses5 libncurses5-dev libreadline-dev libsqlite3-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev python3 python3-pip aria2 wget unzip cpio
 
       - name: Install repo tool
         run: |
@@ -33,11 +33,42 @@ jobs:
           chmod a+rx ~/bin/repo
           echo "$HOME/bin" >> $GITHUB_PATH
 
-      - name: Fetch Artifact / Prepare Device Tree
-        uses: actions/download-artifact@v4
-        with:
-          name: device-tree
-          path: tree_temp
+      - name: Download Images and Generate Local Device Tree
+        run: |
+          pip install gdown
+          gdown "https://drive.google.com/uc?id=1BFML1FevkxGUDiI3I2ha6qCAvNOC-aO7" -O vendor_boot.img
+          gdown "https://drive.google.com/uc?id=1fCdAJUbt8x2FJaGy1RwGJbn3jYkFEuXX" -O boot.img
+
+          wget https://github.com/topjohnwu/Magisk/releases/download/v27.0/Magisk-v27.0.apk -O magisk.zip
+          unzip -j magisk.zip "lib/x86_64/libmagiskboot.so" -d /tmp/
+          sudo mv /tmp/libmagiskboot.so /usr/local/bin/magiskboot
+          sudo chmod +x /usr/local/bin/magiskboot
+
+          mkdir -p $GITHUB_WORKSPACE/local_tree/device/tecno/Spark30
+          WORKDIR=$GITHUB_WORKSPACE/local_tree/device/tecno/Spark30
+          ROOT_DIR=$(pwd)
+
+          mkdir -p vendor_out
+          cd vendor_out
+          magiskboot unpack $ROOT_DIR/vendor_boot.img || true
+          cd $ROOT_DIR
+
+          mkdir -p boot_out
+          cd boot_out
+          magiskboot unpack $ROOT_DIR/boot.img || true
+          cd $ROOT_DIR
+
+          if [ -f vendor_out/kernel ]; then
+            cp vendor_out/kernel $WORKDIR/kernel
+          elif [ -f boot_out/kernel ]; then
+            cp boot_out/kernel $WORKDIR/kernel
+          fi
+
+          mkdir -p $WORKDIR/ramdisk
+          cd $WORKDIR/ramdisk
+          if [ -f $ROOT_DIR/vendor_out/ramdisk.cpio ]; then
+            cpio -i < $ROOT_DIR/vendor_out/ramdisk.cpio || true
+          fi
 
       - name: Setup OrangeFox Build Tree
         run: |
@@ -47,39 +78,32 @@ jobs:
           git config --global user.name "Runner"
           git config --global user.email "runner@github.com"
 
-          # Инициализация манифеста OrangeFox
           repo init -u https://gitlab.com/OrangeFox/Manifest.git -b fox_12.1 --depth=1
           repo sync -c --no-clone-bundle --no-tags --optimized-fetch --prune -j$(nproc)
 
-          # Перенос ранее собранного дерева устройства
           mkdir -p device/tecno/Spark30
-          cp -r $GITHUB_WORKSPACE/tree_temp/device/tecno/Spark30/* device/tecno/Spark30/
+          cp -r $GITHUB_WORKSPACE/local_tree/device/tecno/Spark30/* device/tecno/Spark30/
 
-          # Настройка BoardConfig.mk под OrangeFox
           cat << 'EOF' > device/tecno/Spark30/BoardConfig.mk
           DEVICE_PATH := device/tecno/Spark30
 
-          # Architecture
           TARGET_ARCH := arm64
           TARGET_ARCH_VARIANT := armv8-a
           TARGET_CPU_ABI := arm64-v8a
           TARGET_CPU_ABI2 :=
           TARGET_CPU_VARIANT := generic
 
-          # Kernel
           BOARD_KERNEL_PAGESIZE := 4096
           BOARD_INCLUDE_RECOVERY_DTBO := true
           TARGET_NO_KERNEL := false
           BOARD_USES_VENDOR_BOOT := true
 
-          # Partitions & Dynamic Partitions
           BOARD_FLASH_BLOCK_SIZE := 131072
           BOARD_HAS_LARGE_FILESYSTEM := true
           BOARD_SUPER_PARTITION_GROUPS := main
           BOARD_MAIN_SIZE := 9663676416
           BOARD_MAIN_PARTITION_LIST := system system_ext vendor product
 
-          # OrangeFox Specific Vars
           TW_THEME := portrait_hdpi
           RECOVERY_SDCARD_ON_DATA := true
           TARGET_RECOVERY_QCOM_RTC_FIX := true
@@ -91,11 +115,9 @@ jobs:
           OF_USE_GREEN_LED := 0
           OF_VANILLA_BUILD := 1
 
-          # Virtual A/B
           ENABLE_VIRTUAL_AB := true
           EOF
 
-          # Настройка orangefox.mk
           cat << 'EOF' > device/tecno/Spark30/orangefox_Spark30.mk
           $(call inherit-product, $(SRC_TARGET_DIR)/product/full_base_telephony.mk)
           $(call inherit-product, vendor/recovery/config/common.mk)

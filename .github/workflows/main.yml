@@ -140,12 +140,12 @@ jobs:
           TARGET_RECOVERY_FSTAB := $(DEVICE_PATH)/recovery/root/system/etc/recovery.fstab
           EOF
 
-          cat << 'EOF' > device/tecno/Spark30/orangefox_Spark30.mk
+          cat << 'EOF' > device/tecno/Spark30/fox_Spark30.mk
           $(call inherit-product, $(SRC_TARGET_DIR)/product/full_base_telephony.mk)
           $(call inherit-product, vendor/recovery/config/common.mk)
 
           PRODUCT_DEVICE := Spark30
-          PRODUCT_NAME := orangefox_Spark30
+          PRODUCT_NAME := fox_Spark30
           PRODUCT_BRAND := Tecno
           PRODUCT_MODEL := Tecno Spark 30
           PRODUCT_MANUFACTURER := Tecno
@@ -153,15 +153,15 @@ jobs:
 
           cat << 'EOF' > device/tecno/Spark30/AndroidProducts.mk
           PRODUCT_MAKEFILES := \
-              $(LOCAL_DIR)/orangefox_Spark30.mk
+              $(LOCAL_DIR)/fox_Spark30.mk
 
           COMMON_LUNCH_CHOICES := \
-              orangefox_Spark30-eng \
-              orangefox_Spark30-userdebug
+              fox_Spark30-eng \
+              fox_Spark30-userdebug
           EOF
 
           cat << 'EOF' > device/tecno/Spark30/vendorsetup.sh
-          # Оставляем пустым, так как add_lunch_combo устарел
+          export FOX_BUILD_DEVICE="Spark30"
           EOF
 
       - name: Build OrangeFox
@@ -172,7 +172,7 @@ jobs:
           export LC_ALL="C"
 
           source build/envsetup.sh
-          lunch orangefox_Spark30-eng || lunch orangefox_Spark30-userdebug
+          lunch fox_Spark30-eng || lunch fox_Spark30-userdebug
           make vendor_bootimage -j$(nproc) || make recoveryimage -j$(nproc)
 
       - name: Upload OrangeFox Output

@@ -1,4 +1,4 @@
-name: Make Device Tree
+name: Make Device Tree Clean
 
 on:
   workflow_dispatch:
@@ -21,14 +21,15 @@ jobs:
           sudo apt install -y cpio
           pip install twrpdtgen gdown
 
-      - name: Download boot.img from Google Drive
+      - name: Download Images
         run: |
-          gdown "https://drive.google.com/uc?id=1BFML1FevkxGUDiI3I2ha6qCAvNOC-aO7" -O boot.img
+          gdown "https://drive.google.com/uc?id=1BFML1FevkxGUDiI3I2ha6qCAvNOC-aO7" -O vendor_boot.img
+          gdown "https://drive.google.com/uc?id=1fCdAJUbt8x2FJaGy1RwGJbn3jYkFEuXX" -O boot.img
 
       - name: Generate Device Tree
         run: |
           mkdir output
-          python3 -m twrpdtgen boot.img -o output/
+          python3 -m twrpdtgen boot.img vendor_boot.img -o output/
 
       - name: Upload Device Tree Artifact
         uses: actions/upload-artifact@v4

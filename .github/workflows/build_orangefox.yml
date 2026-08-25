@@ -70,16 +70,20 @@ jobs:
             cpio -i < $ROOT_DIR/vendor_out/ramdisk.cpio || true
           fi
 
-      - name: Setup OrangeFox Build Tree
+      - name: Sync OrangeFox Source Tree
         run: |
-          mkdir -p ~/orangefox
-          cd ~/orangefox
-
           git config --global user.name "Runner"
           git config --global user.email "runner@github.com"
 
-          repo init -u https://gitlab.com/OrangeFox/Manifest.git -b fox_12.1 --depth=1
-          repo sync -c --no-clone-bundle --no-tags --optimized-fetch --prune -j$(nproc)
+          mkdir -p ~/OrangeFox_sync
+          cd ~/OrangeFox_sync
+          git clone https://gitlab.com/OrangeFox/sync.git
+          cd sync
+          ./orangefox_sync.sh --branch 12.1 --path ~/orangefox
+
+      - name: Inject Device Tree and Configure Build
+        run: |
+          cd ~/orangefox
 
           mkdir -p device/tecno/Spark30
           cp -r $GITHUB_WORKSPACE/local_tree/device/tecno/Spark30/* device/tecno/Spark30/
@@ -129,9 +133,18 @@ jobs:
           PRODUCT_MANUFACTURER := Tecno
           EOF
 
+          cat << 'EOF' > device/tecno/Spark30/vendorsetup.sh
+          add_lunch_combo orangefox_Spark30-eng
+          add_lunch_combo orangefox_Spark30-userdebug
+          EOF
+
       - name: Build OrangeFox
         run: |
           cd ~/orangefox
+          export ALLOW_MISSING_DEPENDENCIES=true
+          export FOX_BUILD_DEVICE="Spark30"
+          export LC_ALL="C"
+
           source build/envsetup.sh
           lunch orangefox_Spark30-eng || lunch orangefox_Spark30-userdebug
           make vendor_bootimage -j$(nproc) || make recoveryimage -j$(nproc)

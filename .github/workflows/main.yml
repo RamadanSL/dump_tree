@@ -13,7 +13,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt update
-          sudo apt install -y cpio aria2 wget python3-pip
+          sudo apt install -y cpio aria2 wget python3-pip android-sdk-libsparse-utils android-tools-mkbootimg
 
       - name: Download Images
         run: |
@@ -23,31 +23,35 @@ jobs:
 
       - name: Extract Images and Build Tree
         run: |
-          # Скачиваем официальный бинарник magiskboot для разборки образов MTK
-          wget https://github.com/HuskyDG/magiskboot/releases/download/v25.2/magiskboot -O magiskboot
-          chmod +x magiskboot
-
-          # Создаем структуру папки под Tecno Spark 30
           mkdir -p output/device/tecno/Spark30
-          cd output/device/tecno/Spark30
+          WORKDIR=$(pwd)/output/device/tecno/Spark30
 
-          # Распаковываем vendor_boot.img (вытаскиваем kernel и ramdisk)
-          ../../../../magiskboot unpack ../../../../vendor_boot.img
-          mkdir -p vendor_ramdisk
-          cd vendor_ramdisk
-          cpio -i < ../ramdisk.cpio || true
-          cd ..
+          # Распаковка vendor_boot через системный unpack_bootimg
+          mkdir -p vendor_out
+          unpack_bootimg --boot_img vendor_boot.img --out vendor_out
 
-          # Распаковываем boot.img
-          mkdir -p boot_unpack
-          cd boot_unpack
-          ../../../../../magiskboot unpack ../../../../../boot.img
-          mkdir -p boot_ramdisk
-          cd boot_ramdisk
-          cpio -i < ../ramdisk.cpio || true
-          cd ../..
+          # Распаковка boot через системный unpack_bootimg
+          mkdir -p boot_out
+          unpack_bootimg --boot_img boot.img --out boot_out
 
-          # Создаем базовый BoardConfig.mk
+          # Распаковка ramdisk из vendor_boot
+          mkdir -p $WORKDIR/ramdisk
+          cd $WORKDIR/ramdisk
+          if [ -f ../../../vendor_out/ramdisk ]; then
+            lz4 -d ../../../vendor_out/ramdisk ramdisk.cpio || cp ../../../vendor_out/ramdisk ramdisk.cpio
+            cpio -i < ramdisk.cpio || true
+            rm -f ramdisk.cpio
+          fi
+          cd $WORKDIR
+
+          # Перенос ядра
+          if [ -f ../../../vendor_out/kernel ]; then
+            cp ../../../vendor_out/kernel ./kernel
+          elif [ -f ../../../boot_out/kernel ]; then
+            cp ../../../boot_out/kernel ./kernel
+          fi
+
+          # Генерация BoardConfig.mk
           cat << 'EOF' > BoardConfig.mk
           DEVICE_PATH := device/tecno/Spark30
 
@@ -69,16 +73,13 @@ jobs:
           BOARD_HAS_LARGE_FILESYSTEM := true
           EOF
 
-          # Создаем базовый Android.mk
+          # Генерация Android.mk
           cat << 'EOF' > Android.mk
           LOCAL_PATH := $(call my-dir)
           ifeq ($(TARGET_DEVICE),Spark30)
           include $(call all-makefiles-under,$(LOCAL_PATH))
           endif
           EOF
-
-          # Копируем ядро
-          cp kernel ./kernel
 
       - name: Upload Device Tree Artifact
         uses: actions/upload-artifact@v4

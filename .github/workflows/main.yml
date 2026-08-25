@@ -139,12 +139,12 @@ jobs:
           TARGET_RECOVERY_FSTAB := $(DEVICE_PATH)/recovery/root/system/etc/recovery.fstab
           EOF
 
-          cat << 'EOF' > device/tecno/Spark30/omni_Spark30.mk
+          cat << 'EOF' > device/tecno/Spark30/tw_Spark30.mk
           $(call inherit-product, $(SRC_TARGET_DIR)/product/full_base_telephony.mk)
           $(call inherit-product, vendor/recovery/config/common.mk)
 
           PRODUCT_DEVICE := Spark30
-          PRODUCT_NAME := omni_Spark30
+          PRODUCT_NAME := tw_Spark30
           PRODUCT_BRAND := Tecno
           PRODUCT_MODEL := Tecno Spark 30
           PRODUCT_MANUFACTURER := Tecno
@@ -152,28 +152,25 @@ jobs:
 
           cat << 'EOF' > device/tecno/Spark30/AndroidProducts.mk
           PRODUCT_MAKEFILES := \
-              $(LOCAL_DIR)/omni_Spark30.mk
+              $(LOCAL_DIR)/tw_Spark30.mk
 
           COMMON_LUNCH_CHOICES := \
-              omni_Spark30-eng \
-              omni_Spark30-userdebug
+              tw_Spark30-eng \
+              tw_Spark30-userdebug
           EOF
 
-          cat << 'EOF' > device/tecno/Spark30/vendorsetup.sh
-          add_lunch_combo omni_Spark30-eng
-          add_lunch_combo omni_Spark30-userdebug
-          EOF
+          # Оставляем vendorsetup.sh пустым, чтобы envsetup.sh не падал
+          echo "# Empty vendorsetup.sh" > device/tecno/Spark30/vendorsetup.sh
 
       - name: Build OrangeFox
         run: |
           cd ~/orangefox
           export ALLOW_MISSING_DEPENDENCIES=true
-          export ALLOW_OBSOLETE_BUILD_VARIABLES=true
           export FOX_BUILD_DEVICE="Spark30"
           export LC_ALL="C"
 
           source build/envsetup.sh
-          lunch omni_Spark30-eng
+          lunch tw_Spark30-eng
           make vendor_bootimage -j$(nproc)
 
       - name: Upload OrangeFox Output

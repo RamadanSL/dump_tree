@@ -1,12 +1,7 @@
-name: Make Device Tree Universal
+name: Make Device Tree
 
 on:
   workflow_dispatch:
-    inputs:
-      vendor_boot_url:
-        description: 'Прямая ссылка на vendor_boot.img (Catbox/Pixeldrain)'
-        required: true
-        default: 'https://files.catbox.moe/xxxxxx.img'
 
 jobs:
   build:
@@ -22,30 +17,21 @@ jobs:
 
       - name: Install dependencies
         run: |
-          sudo apt update -y
-          sudo apt install -y cpio aria2 wget python3-pip
-          pip install --upgrade pip
-          pip install twrpdtgen
+          sudo apt update
+          sudo apt install -y cpio
+          pip install twrpdtgen gdown
 
-      - name: Download Image
+      - name: Download boot.img from Google Drive
         run: |
-          aria2c -s 16 -x 16 -o vendor_boot.img "${{ github.event.inputs.vendor_boot_url }}"
+          gdown "https://drive.google.com/uc?id=1BFML1FevkxGUDiI3I2ha6qCAvNOC-aO7" -O boot.img
 
-      - name: Generate Device Tree (Auto-bypass errors)
+      - name: Generate Device Tree
         run: |
-          mkdir -p output
-          # Запуск с авто-подстановкой свойств, если build.prop урезан
-          python3 -m twrpdtgen vendor_boot.img -o output/ || true
-          
-          # Если twrpdtgen упал из-за build.prop, вытаскиваем конфиги напрямую
-          if [ ! -d "output/tecno" ]; then
-            echo "Fallback: Ручное извлечение ramdisk..."
-            mkdir -p output/extracted
-            python3 -m twrpdtgen.extract vendor_boot.img output/extracted || true
-          fi
+          mkdir output
+          python3 -m twrpdtgen boot.img -o output/
 
       - name: Upload Device Tree Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: device-tree-ready
+          name: device-tree
           path: output/

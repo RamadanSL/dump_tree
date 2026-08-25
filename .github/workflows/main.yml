@@ -153,10 +153,6 @@ jobs:
           cat << 'EOF' > device/tecno/Spark30/AndroidProducts.mk
           PRODUCT_MAKEFILES := \
               $(LOCAL_DIR)/tw_Spark30.mk
-
-          COMMON_LUNCH_CHOICES := \
-              tw_Spark30-eng \
-              tw_Spark30-userdebug
           EOF
 
           rm -f device/tecno/Spark30/vendorsetup.sh
@@ -166,11 +162,12 @@ jobs:
           cd ~/orangefox
           export ALLOW_MISSING_DEPENDENCIES=true
           export FOX_BUILD_DEVICE="Spark30"
+          export TARGET_PRODUCT="tw_Spark30"
+          export TARGET_BUILD_VARIANT="eng"
           export LC_ALL="C"
 
           source build/envsetup.sh
-          lunch tw_Spark30-eng
-          make vendor_bootimage -j$(nproc)
+          mka vendor_bootimage -j$(nproc) || make vendor_bootimage -j$(nproc)
 
       - name: Upload OrangeFox Output
         uses: actions/upload-artifact@v4

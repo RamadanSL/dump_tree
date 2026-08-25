@@ -1,38 +1,59 @@
-name: Make Device Tree Clean
+name: Build OrangeFox Recovery
 
 on:
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Maximize build space
         run: |
-          sudo apt update
-          sudo apt install -y cpio aria2 wget python3-pip unzip
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/.ghc
+          sudo rm -rf /usr/local/share/boost
+          sudo apt-get clean
+          sudo rm -rf /var/lib/apt/lists/*
 
-      - name: Download Images
+      - name: Install Build Dependencies
+        run: |
+          sudo dpkg --add-architecture i386
+          sudo apt update
+          sudo apt install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git git-lfs gnupg gperf lib32ncurses5-dev lib32z1-dev libc6-dev-i386 libncurses5 libncurses5-dev libreadline-dev libsqlite3-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev python3 python3-pip aria2 wget unzip cpio
+
+      - name: Install repo tool
+        run: |
+          mkdir -p ~/bin
+          curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+          chmod a+rx ~/bin/repo
+          echo "$HOME/bin" >> $GITHUB_PATH
+
+      - name: Download Stock Images and Generate Device Tree
         run: |
           pip install gdown
+          # Скачивание трех основных образов из родной прошивки Tecno Spark 30
           gdown "https://drive.google.com/uc?id=1BFML1FevkxGUDiI3I2ha6qCAvNOC-aO7" -O vendor_boot.img
           gdown "https://drive.google.com/uc?id=1fCdAJUbt8x2FJaGy1RwGJbn3jYkFEuXX" -O boot.img
+          gdown "https://drive.google.com/uc?id=1MGTKah11xytxtC5pIWsdFx3DNLcFoehN" -O dtbo.img
 
-      - name: Extract Images and Build Tree
-        run: |
-          # Загрузка magiskboot и установка в системный PATH
+          # Подготовка magiskboot для разбора образов
           wget https://github.com/topjohnwu/Magisk/releases/download/v27.0/Magisk-v27.0.apk -O magisk.zip
           unzip -j magisk.zip "lib/x86_64/libmagiskboot.so" -d /tmp/
           sudo mv /tmp/libmagiskboot.so /usr/local/bin/magiskboot
           sudo chmod +x /usr/local/bin/magiskboot
 
-          # Создание рабочей структуры
-          mkdir -p output/device/tecno/Spark30
-          WORKDIR=$(pwd)/output/device/tecno/Spark30
+          # Создание директории дерева устройства
+          mkdir -p $GITHUB_WORKSPACE/local_tree/device/tecno/Spark30
+          WORKDIR=$GITHUB_WORKSPACE/local_tree/device/tecno/Spark30
           ROOT_DIR=$(pwd)
+
+          # Сохранение родного dtbo
+          cp $ROOT_DIR/dtbo.img $WORKDIR/dtbo.img
 
           # Распаковка vendor_boot.img
           mkdir -p vendor_out
@@ -46,23 +67,52 @@ jobs:
           magiskboot unpack $ROOT_DIR/boot.img || true
           cd $ROOT_DIR
 
-          # Копирование ядра
+          # Вытаскиваем Kernel и DTB
           if [ -f vendor_out/kernel ]; then
             cp vendor_out/kernel $WORKDIR/kernel
           elif [ -f boot_out/kernel ]; then
             cp boot_out/kernel $WORKDIR/kernel
           fi
 
-          # Распаковка vendor ramdisk
-          mkdir -p $WORKDIR/ramdisk
-          cd $WORKDIR/ramdisk
-          if [ -f $ROOT_DIR/vendor_out/ramdisk.cpio ]; then
-            cpio -i < $ROOT_DIR/vendor_out/ramdisk.cpio || true
+          if [ -f vendor_out/dtb ]; then
+            cp vendor_out/dtb $WORKDIR/dtb
+          elif [ -f boot_out/dtb ]; then
+            cp boot_out/dtb $WORKDIR/dtb
           fi
-          cd $WORKDIR
 
-          # Конфиг BoardConfig.mk
-          cat << 'EOF' > BoardConfig.mk
+          # Вытягиваем / конфигурируем fstab
+          mkdir -p $WORKDIR/recovery/root/system/etc
+          cat << 'EOF' > $WORKDIR/recovery/root/system/etc/recovery.fstab
+          system      /system      erofs  ro  wait,slotselect,logical,first_stage_mount
+          vendor      /vendor      erofs  ro  wait,slotselect,logical,first_stage_mount
+          product     /product     erofs  ro  wait,slotselect,logical,first_stage_mount
+          system_ext  /system_ext  erofs  ro  wait,slotselect,logical,first_stage_mount
+          /dev/block/by-name/userdata  /data  f2fs  noatime,nosuid,nodev,discard  wait,check,quota,formattable,resize,fileencryption=aes-256-xts:aes-256-cts:v2+inlinecrypt_optimized
+          /dev/block/by-name/metadata  /metadata  ext4  noatime,nosuid,nodev  wait,check,formattable
+          /dev/block/by-name/cache     /cache     ext4  noatime,nosuid,nodev  wait,check,formattable
+          /dev/block/mmcblk0p1         /external_sd  vfat  nosuid,nodev  recoveryonly
+          /dev/block/sda1              /usb_otg     vfat  nosuid,nodev  recoveryonly
+          EOF
+
+      - name: Sync OrangeFox Source Tree
+        run: |
+          git config --global user.name "Runner"
+          git config --global user.email "runner@github.com"
+
+          mkdir -p ~/OrangeFox_sync
+          cd ~/OrangeFox_sync
+          git clone https://gitlab.com/OrangeFox/sync.git
+          cd sync
+          ./orangefox_sync.sh --branch 12.1 --path ~/orangefox
+
+      - name: Inject Device Tree and Configure Build
+        run: |
+          cd ~/orangefox
+
+          mkdir -p device/tecno/Spark30
+          cp -r $GITHUB_WORKSPACE/local_tree/device/tecno/Spark30/* device/tecno/Spark30/
+
+          cat << 'EOF' > device/tecno/Spark30/BoardConfig.mk
           DEVICE_PATH := device/tecno/Spark30
 
           TARGET_ARCH := arm64
@@ -73,23 +123,62 @@ jobs:
 
           BOARD_KERNEL_PAGESIZE := 4096
           BOARD_INCLUDE_RECOVERY_DTBO := true
+          BOARD_PREBUILT_DTBOIMAGE := $(DEVICE_PATH)/dtbo.img
           TARGET_NO_KERNEL := false
           BOARD_USES_VENDOR_BOOT := true
 
           BOARD_FLASH_BLOCK_SIZE := 131072
           BOARD_HAS_LARGE_FILESYSTEM := true
+          BOARD_SUPER_PARTITION_GROUPS := main
+          BOARD_MAIN_SIZE := 9663676416
+          BOARD_MAIN_PARTITION_LIST := system system_ext vendor product
+
+          TW_THEME := portrait_hdpi
+          RECOVERY_SDCARD_ON_DATA := true
+          TARGET_RECOVERY_QCOM_RTC_FIX := true
+          TW_EXCLUDE_DEFAULT_USB_INIT := true
+          TW_EXTRA_LANGUAGES := true
+          TW_DEFAULT_LANGUAGE := ru
+          OF_KEEP_FORCED_ENCRYPTION := true
+          OF_ALLOW_DISABLE_NAVBAR := 0
+          OF_USE_GREEN_LED := 0
+          OF_VANILLA_BUILD := 1
+
+          ENABLE_VIRTUAL_AB := true
+          TARGET_RECOVERY_FSTAB := $(DEVICE_PATH)/recovery/root/system/etc/recovery.fstab
           EOF
 
-          # Конфиг Android.mk
-          cat << 'EOF' > Android.mk
-          LOCAL_PATH := $(call my-dir)
-          ifeq ($(TARGET_DEVICE),Spark30)
-          include $(call all-makefiles-under,$(LOCAL_PATH))
-          endif
+          cat << 'EOF' > device/tecno/Spark30/orangefox_Spark30.mk
+          $(call inherit-product, $(SRC_TARGET_DIR)/product/full_base_telephony.mk)
+          $(call inherit-product, vendor/recovery/config/common.mk)
+
+          PRODUCT_DEVICE := Spark30
+          PRODUCT_NAME := orangefox_Spark30
+          PRODUCT_BRAND := Tecno
+          PRODUCT_MODEL := Tecno Spark 30
+          PRODUCT_MANUFACTURER := Tecno
           EOF
 
-      - name: Upload Device Tree Artifact
+          cat << 'EOF' > device/tecno/Spark30/vendorsetup.sh
+          add_lunch_combo orangefox_Spark30-eng
+          add_lunch_combo orangefox_Spark30-userdebug
+          EOF
+
+      - name: Build OrangeFox
+        run: |
+          cd ~/orangefox
+          export ALLOW_MISSING_DEPENDENCIES=true
+          export FOX_BUILD_DEVICE="Spark30"
+          export LC_ALL="C"
+
+          source build/envsetup.sh
+          lunch orangefox_Spark30-eng || lunch orangefox_Spark30-userdebug
+          make vendor_bootimage -j$(nproc) || make recoveryimage -j$(nproc)
+
+      - name: Upload OrangeFox Output
         uses: actions/upload-artifact@v4
         with:
-          name: device-tree
-          path: output/
+          name: OrangeFox-Recovery
+          path: |
+            ~/orangefox/out/target/product/Spark30/*.img
+            ~/orangefox/out/target/product/Spark30/*.zip

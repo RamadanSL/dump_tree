@@ -13,7 +13,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt update
-          sudo apt install -y cpio aria2 wget python3-pip android-sdk-libsparse-utils android-tools-mkbootimg
+          sudo apt install -y cpio aria2 wget python3-pip
 
       - name: Download Images
         run: |
@@ -23,57 +23,62 @@ jobs:
 
       - name: Extract Images and Build Tree
         run: |
+          # Скачивание official magiskboot из релизов topjohnwu
+          wget https://github.com/topjohnwu/Magisk/releases/download/v27.0/Magisk-v27.0.apk -O magisk.zip
+          unzip -j magisk.zip "lib/x86_64/libmagiskboot.so" -d .
+          mv libmagiskboot.so magiskboot
+          chmod +x magiskboot
+
           mkdir -p output/device/tecno/Spark30
           WORKDIR=$(pwd)/output/device/tecno/Spark30
 
-          # Распаковка vendor_boot через системный unpack_bootimg
+          # Распаковка vendor_boot
           mkdir -p vendor_out
-          unpack_bootimg --boot_img vendor_boot.img --out vendor_out
+          cd vendor_out
+          ../../magiskboot unpack ../vendor_boot.img
+          cd ..
 
-          # Распаковка boot через системный unpack_bootimg
+          # Распаковка boot
           mkdir -p boot_out
-          unpack_bootimg --boot_img boot.img --out boot_out
+          cd boot_out
+          ../../magiskboot unpack ../boot.img
+          cd ..
 
-          # Распаковка ramdisk из vendor_boot
+          # Извлечение ядра
+          if [ -f vendor_out/kernel ]; then
+            cp vendor_out/kernel $WORKDIR/kernel
+          elif [ -f boot_out/kernel ]; then
+            cp boot_out/kernel $WORKDIR/kernel
+          fi
+
+          # Извлечение ramdisk
           mkdir -p $WORKDIR/ramdisk
           cd $WORKDIR/ramdisk
-          if [ -f ../../../vendor_out/ramdisk ]; then
-            lz4 -d ../../../vendor_out/ramdisk ramdisk.cpio || cp ../../../vendor_out/ramdisk ramdisk.cpio
-            cpio -i < ramdisk.cpio || true
-            rm -f ramdisk.cpio
+          if [ -f ../../../vendor_out/ramdisk.cpio ]; then
+            cpio -i < ../../../vendor_out/ramdisk.cpio || true
           fi
           cd $WORKDIR
 
-          # Перенос ядра
-          if [ -f ../../../vendor_out/kernel ]; then
-            cp ../../../vendor_out/kernel ./kernel
-          elif [ -f ../../../boot_out/kernel ]; then
-            cp ../../../boot_out/kernel ./kernel
-          fi
-
-          # Генерация BoardConfig.mk
+          # Конфиг BoardConfig.mk
           cat << 'EOF' > BoardConfig.mk
           DEVICE_PATH := device/tecno/Spark30
 
-          # Architecture
           TARGET_ARCH := arm64
           TARGET_ARCH_VARIANT := armv8-a
           TARGET_CPU_ABI := arm64-v8a
           TARGET_CPU_ABI2 :=
           TARGET_CPU_VARIANT := generic
 
-          # Kernel
           BOARD_KERNEL_PAGESIZE := 4096
           BOARD_INCLUDE_RECOVERY_DTBO := true
           TARGET_NO_KERNEL := false
           BOARD_USES_VENDOR_BOOT := true
 
-          # Partitions
           BOARD_FLASH_BLOCK_SIZE := 131072
           BOARD_HAS_LARGE_FILESYSTEM := true
           EOF
 
-          # Генерация Android.mk
+          # Конфиг Android.mk
           cat << 'EOF' > Android.mk
           LOCAL_PATH := $(call my-dir)
           ifeq ($(TARGET_DEVICE),Spark30)

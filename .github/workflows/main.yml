@@ -135,6 +135,7 @@ jobs:
           OF_ALLOW_DISABLE_NAVBAR := 0
           OF_USE_GREEN_LED := 0
           OF_VANILLA_BUILD := 1
+          FOX_BUILD_DEVICE := Spark30
 
           ENABLE_VIRTUAL_AB := true
           TARGET_RECOVERY_FSTAB := $(DEVICE_PATH)/recovery/root/system/etc/recovery.fstab
@@ -160,9 +161,8 @@ jobs:
               fox_Spark30-userdebug
           EOF
 
-          cat << 'EOF' > device/tecno/Spark30/vendorsetup.sh
-          export FOX_BUILD_DEVICE="Spark30"
-          EOF
+          # Удаляем vendorsetup.sh, чтобы он не вызывал сбоев при инклюде
+          rm -f device/tecno/Spark30/vendorsetup.sh
 
       - name: Build OrangeFox
         run: |

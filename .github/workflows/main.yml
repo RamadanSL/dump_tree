@@ -127,7 +127,6 @@ jobs:
 
           TW_THEME := portrait_hdpi
           RECOVERY_SDCARD_ON_DATA := true
-          TARGET_RECOVERY_QCOM_RTC_FIX := true
           TW_EXCLUDE_DEFAULT_USB_INIT := true
           TW_EXTRA_LANGUAGES := true
           TW_DEFAULT_LANGUAGE := ru
@@ -140,12 +139,12 @@ jobs:
           TARGET_RECOVERY_FSTAB := $(DEVICE_PATH)/recovery/root/system/etc/recovery.fstab
           EOF
 
-          cat << 'EOF' > device/tecno/Spark30/fox_Spark30.mk
+          cat << 'EOF' > device/tecno/Spark30/tw_Spark30.mk
           $(call inherit-product, $(SRC_TARGET_DIR)/product/full_base_telephony.mk)
           $(call inherit-product, vendor/recovery/config/common.mk)
 
           PRODUCT_DEVICE := Spark30
-          PRODUCT_NAME := fox_Spark30
+          PRODUCT_NAME := tw_Spark30
           PRODUCT_BRAND := Tecno
           PRODUCT_MODEL := Tecno Spark 30
           PRODUCT_MANUFACTURER := Tecno
@@ -153,17 +152,14 @@ jobs:
 
           cat << 'EOF' > device/tecno/Spark30/AndroidProducts.mk
           PRODUCT_MAKEFILES := \
-              $(LOCAL_DIR)/fox_Spark30.mk
+              $(LOCAL_DIR)/tw_Spark30.mk
 
           COMMON_LUNCH_CHOICES := \
-              fox_Spark30-eng \
-              fox_Spark30-userdebug
+              tw_Spark30-eng \
+              tw_Spark30-userdebug
           EOF
 
-          cat << 'EOF' > device/tecno/Spark30/vendorsetup.sh
-          add_lunch_combo fox_Spark30-eng
-          add_lunch_combo fox_Spark30-userdebug
-          EOF
+          rm -f device/tecno/Spark30/vendorsetup.sh
 
       - name: Build OrangeFox
         run: |
@@ -173,7 +169,7 @@ jobs:
           export LC_ALL="C"
 
           source build/envsetup.sh
-          lunch fox_Spark30-eng
+          lunch tw_Spark30-eng
           make vendor_bootimage -j$(nproc)
 
       - name: Upload OrangeFox Output

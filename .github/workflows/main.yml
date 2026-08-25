@@ -18,17 +18,21 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt update
-          sudo apt install -y cpio
+          sudo apt install -y cpio android-sdk-libsparse-utils p7zip-full
           pip install twrpdtgen gdown
 
-      - name: Download Image from Google Drive
+      - name: Download Images from Google Drive
         run: |
+          # Скачиваем vendor_boot
           gdown "https://drive.google.com/uc?id=1BFML1FevkxGUDiI3I2ha6qCAvNOC-aO7" -O vendor_boot.img
+          # Скачиваем boot (вставьте ID от boot.img)
+          gdown "https://drive.google.com/uc?id=ВСТАВЬТЕ_ID_BOOT_IMG" -O boot.img
 
       - name: Generate Device Tree
         run: |
           mkdir output
-          python3 -m twrpdtgen vendor_boot.img -o output/
+          # Скармливаем boot.img вместе с vendor_boot.img, чтобы вытащить build.prop
+          python3 -m twrpdtgen boot.img vendor_boot.img -o output/
 
       - name: Upload Device Tree Artifact
         uses: actions/upload-artifact@v4

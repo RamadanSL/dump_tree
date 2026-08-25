@@ -36,38 +36,31 @@ jobs:
       - name: Download Stock Images and Generate Device Tree
         run: |
           pip install gdown
-          # Скачивание трех основных образов из родной прошивки Tecno Spark 30
           gdown "https://drive.google.com/uc?id=1BFML1FevkxGUDiI3I2ha6qCAvNOC-aO7" -O vendor_boot.img
           gdown "https://drive.google.com/uc?id=1fCdAJUbt8x2FJaGy1RwGJbn3jYkFEuXX" -O boot.img
           gdown "https://drive.google.com/uc?id=1MGTKah11xytxtC5pIWsdFx3DNLcFoehN" -O dtbo.img
 
-          # Подготовка magiskboot для разбора образов
           wget https://github.com/topjohnwu/Magisk/releases/download/v27.0/Magisk-v27.0.apk -O magisk.zip
           unzip -j magisk.zip "lib/x86_64/libmagiskboot.so" -d /tmp/
           sudo mv /tmp/libmagiskboot.so /usr/local/bin/magiskboot
           sudo chmod +x /usr/local/bin/magiskboot
 
-          # Создание директории дерева устройства
           mkdir -p $GITHUB_WORKSPACE/local_tree/device/tecno/Spark30
           WORKDIR=$GITHUB_WORKSPACE/local_tree/device/tecno/Spark30
           ROOT_DIR=$(pwd)
 
-          # Сохранение родного dtbo
           cp $ROOT_DIR/dtbo.img $WORKDIR/dtbo.img
 
-          # Распаковка vendor_boot.img
           mkdir -p vendor_out
           cd vendor_out
           magiskboot unpack $ROOT_DIR/vendor_boot.img || true
           cd $ROOT_DIR
 
-          # Распаковка boot.img
           mkdir -p boot_out
           cd boot_out
           magiskboot unpack $ROOT_DIR/boot.img || true
           cd $ROOT_DIR
 
-          # Вытаскиваем Kernel и DTB
           if [ -f vendor_out/kernel ]; then
             cp vendor_out/kernel $WORKDIR/kernel
           elif [ -f boot_out/kernel ]; then
@@ -80,7 +73,6 @@ jobs:
             cp boot_out/dtb $WORKDIR/dtb
           fi
 
-          # Вытягиваем / конфигурируем fstab
           mkdir -p $WORKDIR/recovery/root/system/etc
           cat << 'EOF' > $WORKDIR/recovery/root/system/etc/recovery.fstab
           system      /system      erofs  ro  wait,slotselect,logical,first_stage_mount
@@ -159,9 +151,17 @@ jobs:
           PRODUCT_MANUFACTURER := Tecno
           EOF
 
+          cat << 'EOF' > device/tecno/Spark30/AndroidProducts.mk
+          PRODUCT_MAKEFILES := \
+              $(LOCAL_DIR)/orangefox_Spark30.mk
+
+          COMMON_LUNCH_CHOICES := \
+              orangefox_Spark30-eng \
+              orangefox_Spark30-userdebug
+          EOF
+
           cat << 'EOF' > device/tecno/Spark30/vendorsetup.sh
-          add_lunch_combo orangefox_Spark30-eng
-          add_lunch_combo orangefox_Spark30-userdebug
+          # Оставляем пустым, так как add_lunch_combo устарел
           EOF
 
       - name: Build OrangeFox

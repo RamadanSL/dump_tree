@@ -13,7 +13,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt update
-          sudo apt install -y cpio aria2 wget python3-pip
+          sudo apt install -y cpio aria2 wget python3-pip unzip
 
       - name: Download Images
         run: |
@@ -23,39 +23,41 @@ jobs:
 
       - name: Extract Images and Build Tree
         run: |
-          # Скачивание official magiskboot из релизов topjohnwu
+          # Загрузка magiskboot и установка в системный PATH
           wget https://github.com/topjohnwu/Magisk/releases/download/v27.0/Magisk-v27.0.apk -O magisk.zip
-          unzip -j magisk.zip "lib/x86_64/libmagiskboot.so" -d .
-          mv libmagiskboot.so magiskboot
-          chmod +x magiskboot
+          unzip -j magisk.zip "lib/x86_64/libmagiskboot.so" -d /tmp/
+          sudo mv /tmp/libmagiskboot.so /usr/local/bin/magiskboot
+          sudo chmod +x /usr/local/bin/magiskboot
 
+          # Создание рабочей структуры
           mkdir -p output/device/tecno/Spark30
           WORKDIR=$(pwd)/output/device/tecno/Spark30
+          ROOT_DIR=$(pwd)
 
-          # Распаковка vendor_boot
+          # Распаковка vendor_boot.img
           mkdir -p vendor_out
           cd vendor_out
-          ../../magiskboot unpack ../vendor_boot.img
-          cd ..
+          magiskboot unpack $ROOT_DIR/vendor_boot.img || true
+          cd $ROOT_DIR
 
-          # Распаковка boot
+          # Распаковка boot.img
           mkdir -p boot_out
           cd boot_out
-          ../../magiskboot unpack ../boot.img
-          cd ..
+          magiskboot unpack $ROOT_DIR/boot.img || true
+          cd $ROOT_DIR
 
-          # Извлечение ядра
+          # Копирование ядра
           if [ -f vendor_out/kernel ]; then
             cp vendor_out/kernel $WORKDIR/kernel
           elif [ -f boot_out/kernel ]; then
             cp boot_out/kernel $WORKDIR/kernel
           fi
 
-          # Извлечение ramdisk
+          # Распаковка vendor ramdisk
           mkdir -p $WORKDIR/ramdisk
           cd $WORKDIR/ramdisk
-          if [ -f ../../../vendor_out/ramdisk.cpio ]; then
-            cpio -i < ../../../vendor_out/ramdisk.cpio || true
+          if [ -f $ROOT_DIR/vendor_out/ramdisk.cpio ]; then
+            cpio -i < $ROOT_DIR/vendor_out/ramdisk.cpio || true
           fi
           cd $WORKDIR
 

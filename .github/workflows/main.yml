@@ -159,12 +159,14 @@ jobs:
               tw_Spark30-userdebug
           EOF
 
-          # Оставляем vendorsetup.sh пустым, чтобы envsetup.sh не падал
-          echo "# Empty vendorsetup.sh" > device/tecno/Spark30/vendorsetup.sh
-
       - name: Build OrangeFox
         run: |
           cd ~/orangefox
+          
+          # Жесткое физическое удаление любых vendorsetup.sh перед инициализацией окружения
+          find device/tecno/Spark30 -name "vendorsetup.sh" -exec rm -vf {} \;
+          find vendor/ -name "vendorsetup.sh" -exec rm -vf {} \; 2>/dev/null || true
+
           export ALLOW_MISSING_DEPENDENCIES=true
           export FOX_BUILD_DEVICE="Spark30"
           export LC_ALL="C"

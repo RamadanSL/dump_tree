@@ -1,0 +1,122 @@
+name: Build OrangeFox Recovery
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Maximize build space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/.ghc
+          sudo rm -rf /usr/local/share/boost
+          sudo apt-get clean
+          sudo rm -rf /var/lib/apt/lists/*
+
+      - name: Install Build Dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git git-lfs gnupg gperf lib32ncurses5-dev lib32z1-dev liblibc6-dev-i386 libncurses5 libncurses5-dev libreadline-dev libsqlite3-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev python3 python3-pip android-sdk-libsparse-utils android-tools-mkbootimg
+
+      - name: Install repo tool
+        run: |
+          mkdir -p ~/bin
+          curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+          chmod a+rx ~/bin/repo
+          echo "$HOME/bin" >> $GITHUB_PATH
+
+      - name: Fetch Artifact / Prepare Device Tree
+        uses: actions/download-artifact@v4
+        with:
+          name: device-tree
+          path: tree_temp
+
+      - name: Setup OrangeFox Build Tree
+        run: |
+          mkdir -p ~/orangefox
+          cd ~/orangefox
+
+          git config --global user.name "Runner"
+          git config --global user.email "runner@github.com"
+
+          # Инициализация манифеста OrangeFox
+          repo init -u https://gitlab.com/OrangeFox/Manifest.git -b fox_12.1 --depth=1
+          repo sync -c --no-clone-bundle --no-tags --optimized-fetch --prune -j$(nproc)
+
+          # Перенос ранее собранного дерева устройства
+          mkdir -p device/tecno/Spark30
+          cp -r $GITHUB_WORKSPACE/tree_temp/device/tecno/Spark30/* device/tecno/Spark30/
+
+          # Настройка BoardConfig.mk под OrangeFox для Tecno Spark 30 (MediaTek Android 14)
+          cat << 'EOF' > device/tecno/Spark30/BoardConfig.mk
+          DEVICE_PATH := device/tecno/Spark30
+
+          # Architecture
+          TARGET_ARCH := arm64
+          TARGET_ARCH_VARIANT := armv8-a
+          TARGET_CPU_ABI := arm64-v8a
+          TARGET_CPU_ABI2 :=
+          TARGET_CPU_VARIANT := generic
+
+          # Kernel
+          BOARD_KERNEL_PAGESIZE := 4096
+          BOARD_INCLUDE_RECOVERY_DTBO := true
+          TARGET_NO_KERNEL := false
+          BOARD_USES_VENDOR_BOOT := true
+
+          # Partitions & Dynamic Partitions
+          BOARD_FLASH_BLOCK_SIZE := 131072
+          BOARD_HAS_LARGE_FILESYSTEM := true
+          BOARD_SUPER_PARTITION_GROUPS := main
+          BOARD_MAIN_SIZE := 9663676416
+          BOARD_MAIN_PARTITION_LIST := system system_ext vendor product
+
+          # OrangeFox Specific Vars
+          TW_THEME := portrait_hdpi
+          RECOVERY_SDCARD_ON_DATA := true
+          TARGET_RECOVERY_QCOM_RTC_FIX := true
+          TW_EXCLUDE_DEFAULT_USB_INIT := true
+          TW_EXTRA_LANGUAGES := true
+          TW_DEFAULT_LANGUAGE := ru
+          OF_KEEP_FORCED_ENCRYPTION := true
+          OF_ALLOW_DISABLE_NAVBAR := 0
+          OF_USE_GREEN_LED := 0
+          OF_VANILLA_BUILD := 1
+
+          # Virtual A/B
+          ENABLE_VIRTUAL_AB := true
+          EOF
+
+          # Настройка orangefox.mk
+          cat << 'EOF' > device/tecno/Spark30/orangefox_Spark30.mk
+          $(call inherit-product, $(SRC_TARGET_DIR)/product/full_base_telephony.mk)
+          $(call inherit-product, vendor/recovery/config/common.mk)
+
+          PRODUCT_DEVICE := Spark30
+          PRODUCT_NAME := orangefox_Spark30
+          PRODUCT_BRAND := Tecno
+          PRODUCT_MODEL := Tecno Spark 30
+          PRODUCT_MANUFACTURER := Tecno
+          EOF
+
+      - name: Build OrangeFox
+        run: |
+          cd ~/orangefox
+          source build/envsetup.sh
+          lunch orangefox_Spark30-eng || lunch orangefox_Spark30-userdebug
+          make vendor_bootimage -j$(nproc) || make recoveryimage -j$(nproc)
+
+      - name: Upload OrangeFox Output
+        uses: actions/upload-artifact@v4
+        with:
+          name: OrangeFox-Recovery
+          path: |
+            ~/orangefox/out/target/product/Spark30/*.img
+            ~/orangefox/out/target/product/Spark30/*.zip
